@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi pizarra de estudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pizarra:#1F3B2D; --pizarra-2:#2A4C3A; --tiza:#F3F1E8; --tiza-amarilla:#F2D16B;
+    --fondo:#E9EEEA; --texto:#18241D; --suave:#5B6B61; --bien:#2E8B57; --mal:#B8433A; --linea:#C9D3CC;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --fondo:#121A15; --texto:#E6ECE7; --suave:#9AAA9F; --linea:#2C3A31; } }
+  *,*::before,*::after{box-sizing:inherit}
+  html,body{margin:0}
+  body{background:var(--fondo);color:var(--texto);font-family:"Atkinson Hyperlegible",system-ui,sans-serif;font-size:18px;line-height:1.5}
+  header{background:var(--pizarra);color:var(--tiza);padding:1.4rem 1.25rem 1.6rem}
+  header h1{margin:0;font-size:1.9rem;line-height:1.15}
+  header p{margin:.35rem 0 0;color:#C8D3CB;font-size:1rem}
+  header a{color:inherit;text-decoration:none}
+  main{max-width:640px;margin:0 auto;padding:1.25rem}
+  h2{font-size:1.1rem;color:var(--suave);margin:1.5rem 0 .5rem;font-weight:700}
+  .tema{display:block;padding:1rem 0;border-bottom:1px solid var(--linea);color:inherit;text-decoration:none;font-size:1.15rem}
+  .tema small{display:block;color:var(--suave);font-size:.9rem}
+  .modos{display:flex;gap:.5rem;margin:1rem 0}
+  button{font:inherit;cursor:pointer;border-radius:10px;border:2px solid var(--pizarra);background:transparent;color:var(--texto);padding:.65rem 1rem}
+  @media (prefers-color-scheme:dark){ button{border-color:#4E7A62} }
+  button.activo,button.principal{background:var(--pizarra);color:var(--tiza);border-color:var(--pizarra)}
+  button:focus-visible,a:focus-visible{outline:3px solid var(--tiza-amarilla);outline-offset:2px}
+  .tarjeta{background:var(--pizarra);color:var(--tiza);border-radius:6px;min-height:230px;padding:1.5rem;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;white-space:pre-line;cursor:pointer;box-shadow:inset 0 0 0 10px var(--pizarra-2);user-select:none}
+  .tarjeta .frente{font-size:2rem;font-weight:700;color:var(--tiza-amarilla)}
+  .tarjeta .reverso{font-size:1.15rem}
+  .pista{color:var(--suave);text-align:center;font-size:.9rem;margin:.5rem 0}
+  .fila{display:flex;gap:.5rem;justify-content:space-between;align-items:center;margin-top:1rem}
+  .opcion{display:block;width:100%;text-align:left;margin:.5rem 0}
+  .opcion.bien{background:var(--bien);border-color:var(--bien);color:#fff}
+  .opcion.mal{background:var(--mal);border-color:var(--mal);color:#fff}
+  .explicacion{padding:.75rem 1rem;border-left:4px solid var(--tiza-amarilla);background:rgba(242,209,107,.15);margin-top:.75rem}
+  .pregunta{font-size:1.2rem;font-weight:700}
+  .nota{font-size:3rem;font-weight:700;text-align:center;margin:1rem 0 0}
+  @media (prefers-reduced-motion:no-preference){ .tarjeta{transition:transform .15s} .tarjeta:active{transform:scale(.98)} }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="#">Mi pizarra de estudio</a></h1>
+  <p id="sub">Elige un tema y repasa con tarjetas o haz el test.</p>
+</header>
+<main id="app"></main>
+
+<script src="temas.js"></script>
+<script>
+const app = document.getElementById("app");
+const sub = document.getElementById("sub");
+const temas = window.TEMAS || [];
+
+function guardar(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function leer(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function mezclar(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+function inicio(){
+  sub.textContent = "Elige un tema y repasa con tarjetas o haz el test.";
+  if(!temas.length){ app.innerHTML = "<p>Todavía no hay temas. Añade uno en el archivo temas.js.</p>"; return; }
+  const grupos = {};
+  temas.forEach(t => (grupos[t.asignatura] ??= []).push(t));
+  app.innerHTML = Object.entries(grupos).map(([asig, lista]) =>
+    `<h2>${esc(asig)}</h2>` + lista.map(t => {
+      const r = leer("record-"+t.id);
+      const info = `${t.tarjetas?.length||0} tarjetas, ${t.test?.length||0} preguntas` + (r!=null ? `. Mejor nota: ${r}/${t.test.length}` : "");
+      return `<a class="tema" href="#${t.id}">${esc(t.titulo)}<small>${info}</small></a>`;
+    }).join("")
+  ).join("");
+}
+
+function verTema(t, modo){
+  sub.textContent = `${t.asignatura}: ${t.titulo}`;
+  app.innerHTML = `<div class="modos">
+    <button id="bT" class="${modo==='tarjetas'?'activo':''}">Tarjetas</button>
+    <button id="bX" class="${modo==='test'?'activo':''}">Test</button></div><div id="zona"></div>`;
+  document.getElementById("bT").onclick = () => verTema(t,"tarjetas");
+  document.getElementById("bX").onclick = () => verTema(t,"test");
+  const zona = document.getElementById("zona");
+  modo === "test" ? test(t, zona) : tarjetas(t, zona);
+}
+
+function tarjetas(t, zona){
+  let lista = [...(t.tarjetas||[])], i = 0, girada = false;
+  if(!lista.length){ zona.innerHTML = "<p>Este tema no tiene tarjetas.</p>"; return; }
+  function pintar(){
+    const c = lista[i];
+    zona.innerHTML = `
+      <div class="tarjeta" id="tj" role="button" tabindex="0" aria-label="Girar tarjeta">
+        ${girada ? `<div class="reverso">${esc(c.reverso)}</div>` : `<div class="frente">${esc(c.frente)}</div>`}
+      </div>
+      <p class="pista">${girada ? "Toca para volver" : "Toca la tarjeta para ver la respuesta"}</p>
+      <div class="fila">
+        <button id="ant">Anterior</button><span>${i+1} / ${lista.length}</span><button id="sig" class="principal">Siguiente</button>
+      </div>
+      <div class="fila"><button id="mez">Mezclar tarjetas</button></div>`;
+    const tj = document.getElementById("tj");
+    tj.onclick = () => { girada = !girada; pintar(); };
+    tj.onkeydown = e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); tj.click(); } };
+    document.getElementById("ant").onclick = () => { i = (i-1+lista.length)%lista.length; girada=false; pintar(); };
+    document.getElementById("sig").onclick = () => { i = (i+1)%lista.length; girada=false; pintar(); };
+    document.getElementById("mez").onclick = () => { lista = mezclar(lista); i=0; girada=false; pintar(); };
+  }
+  pintar();
+}
+
+function test(t, zona){
+  const preguntas = mezclar(t.test||[]);
+  let i = 0, aciertos = 0;
+  if(!preguntas.length){ zona.innerHTML = "<p>Este tema no tiene test.</p>"; return; }
+  function pintar(){
+    if(i >= preguntas.length){
+      const r = leer("record-"+t.id);
+      if(r==null || aciertos > r) guardar("record-"+t.id, aciertos);
+      zona.innerHTML = `<p class="nota">${aciertos} / ${preguntas.length}</p>
+        <p style="text-align:center">${aciertos===preguntas.length ? "Todo bien. Perfecto." : "Repasa las tarjetas y vuelve a intentarlo."}</p>
+        <div class="fila"><button id="otra" class="principal">Repetir test</button><a href="#">Volver a los temas</a></div>`;
+      document.getElementById("otra").onclick = () => test(t, zona);
+      return;
+    }
+    const p = preguntas[i];
+    zona.innerHTML = `<p class="pista">Pregunta ${i+1} de ${preguntas.length}</p>
+      <p class="pregunta">${esc(p.pregunta)}</p>
+      <div id="ops">${p.opciones.map((o,n)=>`<button class="opcion" data-n="${n}">${esc(o)}</button>`).join("")}</div>
+      <div id="fb"></div>`;
+    zona.querySelectorAll(".opcion").forEach(b => b.onclick = () => {
+      const n = +b.dataset.n, ok = n === p.correcta;
+      if(ok) aciertos++;
+      zona.querySelectorAll(".opcion").forEach(x => { x.disabled = true; if(+x.dataset.n===p.correcta) x.classList.add("bien"); });
+      if(!ok) b.classList.add("mal");
+      document.getElementById("fb").innerHTML = `<div class="explicacion">${ok?"Correcto. ":"No es esa. "}${esc(p.explicacion||"")}</div>
+        <div class="fila"><span></span><button id="sig" class="principal">Siguiente</button></div>`;
+      document.getElementById("sig").onclick = () => { i++; pintar(); };
+    });
+  }
+  pintar();
+}
+
+function router(){
+  const id = location.hash.slice(1);
+  const t = temas.find(x => x.id === id);
+  t ? verTema(t,"tarjetas") : inicio();
+  window.scrollTo(0,0);
+}
+window.addEventListener("hashchange", router);
+router();
+</script>
+</body>
+</html>
